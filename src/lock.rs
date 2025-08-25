@@ -130,12 +130,19 @@ impl ScopedDirLock {
             (path, file)
         };
 
+        fn trylock_to_io(e: std::fs::TryLockError) -> io::Error {
+            match e {
+                std::fs::TryLockError::WouldBlock => io::Error::new(io::ErrorKind::WouldBlock, e),
+                _ => io::Error::new(io::ErrorKind::Unsupported, e),
+            }
+        }
+
         // Lock
         match (opts.exclusive, opts.non_blocking) {
             (true, false) => file.lock_exclusive(),
             (true, true) => file.try_lock_exclusive(),
             (false, false) => file.lock_shared(),
-            (false, true) => file.try_lock_shared(),
+            (false, true) => file.try_lock_shared().map_err(trylock_to_io),
         }
         .context(&path, || {
             format!(
